@@ -1,3 +1,4 @@
+import { findConversions, convertTemperature, convertDistance } from './conversion-parsers'
 import * as slackRequest from '../utils/slack-request'
 import timeParser from './timezones'
 import commandParser, { Command } from './commands'
@@ -97,6 +98,34 @@ const handleSlackMessage = async (
     const command = commandParser(event)
 
     return commandResponse(team, event, command)
+  }
+
+  const conversions = findConversions(event.text);
+  
+  if (conversions.length > 0) {
+    const team = await getTeam(team_id)
+
+    if (!team) {
+      return `team ${team_id} is missing from db`
+    }
+
+    const conversionResponses = conversions.map(conv => {
+      if (conv.type === 'temperature') {
+        return convertTemperature(conv.value, conv.unit);
+      } else {
+        return convertDistance(conv.value, conv.unit);
+      }
+    });
+
+    // Send conversion results as ephemeral message to the channel
+    await slackRequest.post('chat.postEphemeral', team._token, {
+      channel: event.channel,
+      user: event.user,
+      text: conversionResponses.join('\n'),
+      thread_ts: event.thread_ts,
+    });
+
+    return 'conversion sent';
   }
 
   const command = commandParser(event, bot_id)
